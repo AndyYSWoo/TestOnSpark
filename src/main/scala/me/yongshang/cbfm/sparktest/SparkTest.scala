@@ -12,6 +12,7 @@ object SparkTest {
     .builder
     .appName("CBFM Test")
     .config("parquet.task.side.metadata", true)
+    .config("parquet.enable.dictionary",false)
     .getOrCreate
   def main(args: Array[String]) {
 
@@ -31,9 +32,9 @@ object SparkTest {
       , Person("James", 40, 2000)
       , Person("Someone", 35, 3000)
       , Person("Customer#000000003", 35, 3000)
-//      , Person("MG9kdTD2WBHm", 35, 3000)
-//      , Person("11-719-748-3364", 35, 3000)
-//      , Person(" deposits eat slyly ironic, even instructions. express foxes detect slyly. blithely even accounts abov", 35, 3000)
+      , Person("MG9kdTD2WBHm", 35, 3000)
+      , Person("11-719-748-3364", 35, 3000)
+      , Person(" deposits eat slyly ironic, even instructions. express foxes detect slyly. blithely even accounts abov", 35, 3000)
     )
     val personDF = sparkContext.createDataFrame(persons)
     personDF.show()

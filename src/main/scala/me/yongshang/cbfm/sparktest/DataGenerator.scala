@@ -12,6 +12,8 @@ object DataGenerator {
   val spark = SparkSession
     .builder
     .appName("TPC-H data generator")
+    .config("parquet.task.side.metadata", true)
+    .config("parquet.enable.dictionary",false)
     .getOrCreate
   def main(args: Array[String]): Unit = {
     CBFM.DEBUG = false
@@ -23,7 +25,7 @@ object DataGenerator {
     val customer = spark.sparkContext
       .textFile("/Users/yongshangwu/Downloads/tpch_2_17_0/dbgen/customer.tbl")
       .map(_.split("\\|"))
-      .take(3)
+//      .take(10000)// seems work out fine on 10000 tuples
       .map(attrs => Customer(attrs(0).toInt, attrs(1), attrs(2)
                               , attrs(3).toInt, attrs(4), attrs(5).toDouble
                               , attrs(6), attrs(7)))
