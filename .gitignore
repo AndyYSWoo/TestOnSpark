@@ -1,0 +1,5 @@
+
+.idea/*
+target/*
+TestOnSpark.iml
+dependency-reduced-pom.xml
