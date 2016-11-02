@@ -13,11 +13,12 @@ object SparkTest {
     .appName("CBFM Test")
     .config("parquet.task.side.metadata", true)
     .config("parquet.enable.dictionary",false)
+//    .config("spark.io.compression.codec", "lzf")
     .getOrCreate
   def main(args: Array[String]) {
 
     // config CBFM params
-    CBFM.DEBUG = true
+    CBFM.DEBUG = false
     CBFM.ON = true
     CBFM.desired_false_positive_probability_ = 0.1
     CBFM.setIndexedDimensions(Array("name", "age", "balance"))
