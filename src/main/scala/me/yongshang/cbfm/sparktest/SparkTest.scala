@@ -18,7 +18,7 @@ object SparkTest {
   def main(args: Array[String]) {
 
     // config CBFM params
-    CBFM.DEBUG = false
+    CBFM.DEBUG = true
     CBFM.ON = true
     CBFM.desired_false_positive_probability_ = 0.1
     CBFM.setIndexedDimensions(Array("name", "age", "balance"))
