@@ -4,7 +4,7 @@ import java.io.{File, FileWriter, PrintWriter}
 import java.text.SimpleDateFormat
 import java.sql.Date
 
-import me.yongshang.cbfm.CBFM
+import me.yongshang.cbfm.{FullBitmapIndex, CBFM}
 import org.apache.spark.deploy.SparkHadoopUtil
 import org.apache.spark.sql.SparkSession
 import org.apache.thrift.protocol.TType
@@ -20,6 +20,7 @@ object DataGenerator {
     .config("parquet.task.side.metadata", true)
     .config("parquet.enable.dictionary",false)
 //    .config("parquet.block.size", blockSize)
+    .config("spark.sql.parquet.compression.codec", "uncompressed")
     .getOrCreate
 
   def setUpCBFM(on: Boolean): Unit ={
@@ -37,6 +38,13 @@ object DataGenerator {
     // lineitem
 //    CBFM.setIndexedDimensions(Array("l_orderkey", "l_partkey", "l_suppkey"))
 //    CBFM.reducedimensions = Array(3)
+  }
+
+  def setUpBitmapCBFM(on: Boolean): Unit ={
+    FullBitmapIndex.ON = on;
+    FullBitmapIndex.falsePositiveProbability = 0.1;
+    FullBitmapIndex.setDimensions(Array("ps_partkey", "ps_suppkey", "ps_supplycost"),
+      Array(Array("ps_suppkey", "ps_supplycost")))
   }
 
   def generateFile(): Unit ={
@@ -116,6 +124,7 @@ object DataGenerator {
 
   def main(args: Array[String]): Unit = {
     setUpCBFM(false)
+    setUpBitmapCBFM(true)
     generateFile()
   }
 }

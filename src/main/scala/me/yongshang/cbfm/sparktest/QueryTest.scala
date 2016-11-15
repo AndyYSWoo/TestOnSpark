@@ -10,7 +10,9 @@ import org.apache.spark.sql.SparkSession
 object QueryTest {
   val spark = DataGenerator.spark
   def main(args: Array[String]) {
-    DataGenerator.setUpCBFM(true)
+    DataGenerator.setUpCBFM(false)
+
+    DataGenerator.setUpBitmapCBFM(true)
 
     DataGenerator.generateFile()
 
@@ -30,12 +32,12 @@ object QueryTest {
   }
 
   def readAndCreateTable(): Unit ={
-    spark.read.parquet("part.parquet").createOrReplaceTempView("part")
-    spark.read.parquet("supplier.parquet").createOrReplaceTempView("supplier")
+//    spark.read.parquet("part.parquet").createOrReplaceTempView("part")
+//    spark.read.parquet("supplier.parquet").createOrReplaceTempView("supplier")
     spark.read.parquet("partsupp.parquet").createOrReplaceTempView("partsupp")
 //    spark.read.parquet("lineitem.parquet").createOrReplaceTempView("lineitem")
-    spark.read.parquet("nation.parquet").createOrReplaceTempView("nation")
-    spark.read.parquet("region.parquet").createOrReplaceTempView("region")
+//    spark.read.parquet("nation.parquet").createOrReplaceTempView("nation")
+//    spark.read.parquet("region.parquet").createOrReplaceTempView("region")
   }
 
   def stats(): Unit ={
