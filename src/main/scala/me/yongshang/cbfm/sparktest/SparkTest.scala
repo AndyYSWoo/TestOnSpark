@@ -8,23 +8,14 @@ import org.apache.spark.sql.types._
   * Created by yongshangwu on 2016/10/28.
   */
 object SparkTest {
-  val sparkContext = SparkSession
-    .builder
-    .appName("CBFM Test")
-    .config("parquet.task.side.metadata", true)
-    .config("parquet.enable.dictionary",false)
-//    .config("spark.io.compression.codec", "lzf")
-    .getOrCreate
+  val sparkContext = DataGenerator.spark
   def main(args: Array[String]) {
+    // config
+    DataGenerator.setUpCBFM(false)
+    DataGenerator.setUpBitmapCBFM(true, Array("name", "age", "balance"), Array(Array("name", "balance")))
 
-    // config CBFM params
-    CBFM.DEBUG = true
-    CBFM.ON = true
-    CBFM.desired_false_positive_probability_ = 0.1
-    CBFM.setIndexedDimensions(Array("name", "age", "balance"))
-    CBFM.reducedimensions = Array(3)
     createFile()
-    query()
+//    query()
   }
   def createFile(): Unit ={
     val persons = Seq(

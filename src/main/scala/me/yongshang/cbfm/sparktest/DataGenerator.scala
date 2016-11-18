@@ -4,7 +4,7 @@ import java.io.{File, FileWriter, PrintWriter}
 import java.text.SimpleDateFormat
 import java.sql.Date
 
-import me.yongshang.cbfm.{FullBitmapIndex, CBFM}
+import me.yongshang.cbfm.{MDBF, FullBitmapIndex, CBFM}
 import org.apache.spark.deploy.SparkHadoopUtil
 import org.apache.spark.sql.SparkSession
 import org.apache.thrift.protocol.TType
@@ -40,16 +40,21 @@ object DataGenerator {
 //    CBFM.reducedimensions = Array(3)
   }
 
-  def setUpBitmapCBFM(on: Boolean): Unit ={
+  def setUpBitmapCBFM(on: Boolean, dimensions: Array[String], reduced: Array[Array[String]]): Unit ={
     FullBitmapIndex.ON = on;
     FullBitmapIndex.falsePositiveProbability = 0.1;
-    FullBitmapIndex.setDimensions(Array("ps_partkey", "ps_suppkey", "ps_supplycost"),
-      Array(Array("ps_suppkey", "ps_supplycost")))
+    FullBitmapIndex.setDimensions(dimensions, reduced)
   }
 
-  def generateFile(): Unit ={
-    val dirPath = "/Users/yongshangwu/Downloads/tpch_2_17_0/dbgen/"
-//
+  def setUpMDBF(on: Boolean, dimensions: Array[String]): Unit ={
+    MDBF.ON = on;
+    MDBF.desiredFalsePositiveProbability = 0.1;
+    MDBF.dimensions = dimensions;
+  }
+
+  def generateFile(dir: String): Unit ={
+    val dirPath = dir
+
 //    val part = spark.sparkContext
 //      .textFile(dirPath+"part.tbl")
 //      .map(_.split("\\|"))
@@ -84,7 +89,7 @@ object DataGenerator {
 //        , attrs(6), attrs(7)))
 //    val customerDF = spark.createDataFrame(customer)
 //    customerDF.write.parquet("customer.parquet")
-
+//
 //    val orders = spark.sparkContext
 //      .textFile(dirPath+"orders.tbl")
 //      .map(_.split("\\|"))
@@ -93,7 +98,7 @@ object DataGenerator {
 //        , attrs(6), attrs(7), attrs(8)))
 //    val ordersDF = spark.createDataFrame(orders)
 //    ordersDF.write.parquet("orders.parquet")
-
+//
 //    val lineitem = spark.sparkContext
 //      .textFile(dirPath+"lineitem.tbl")
 //      .map(_.split("\\|"))
@@ -124,8 +129,8 @@ object DataGenerator {
 
   def main(args: Array[String]): Unit = {
     setUpCBFM(false)
-    setUpBitmapCBFM(true)
-    generateFile()
+    setUpBitmapCBFM(true, Array("ps_partkey", "ps_suppkey", "ps_supplycost"), Array(Array("ps_suppkey", "ps_supplycost")))
+    generateFile(args(0))
   }
 }
 
