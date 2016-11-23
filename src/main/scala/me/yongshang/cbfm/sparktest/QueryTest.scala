@@ -36,7 +36,7 @@ object QueryTest {
 
     // generate file & create table
     DataGenerator.generateFile(dataSourceFolder)
-    readAndCreateTable()
+    DataGenerator.readAndCreateTable()
 
     // query
     var query = "select s_acctbal, s_name, n_name, p_partkey, p_mfgr, s_address, s_phone, s_comment\nfrom part, supplier, partsupp, nation, region\nwhere p_partkey = ps_partkey and s_suppkey = ps_suppkey and p_size = 9 and p_type like '%BRASS' and s_nationkey = n_nationkey and n_regionkey = r_regionkey and r_name = 'ASIA' and ps_supplycost = ( \tselect \t\tmin(ps_supplycost) \tfrom \t\tpartsupp, \t\tsupplier, \t\tnation, \t\tregion \twhere \t\tp_partkey = ps_partkey \t\tand s_suppkey = ps_suppkey \t\tand s_nationkey = n_nationkey \t\tand n_regionkey = r_regionkey \t\tand r_name = 'ASIA' )\n"
@@ -50,16 +50,5 @@ object QueryTest {
     val results = spark.sql(query)
     results.show(10)
     println("==========query time: "+(System.currentTimeMillis()-start))
-  }
-
-  def readAndCreateTable(): Unit ={
-    spark.read.parquet("part.parquet").createOrReplaceTempView("part")
-//    spark.read.parquet("supplier.parquet").createOrReplaceTempView("supplier")
-//    spark.read.parquet("partsupp.parquet").createOrReplaceTempView("partsupp")
-//    spark.read.parquet("customer.parquet").createOrReplaceTempView("customer")
-//    spark.read.parquet("orders.parquet").createOrReplaceTempView("orders")
-//    spark.read.parquet("lineitem.parquet").createOrReplaceTempView("lineitem")
-//    spark.read.parquet("nation.parquet").createOrReplaceTempView("nation")
-//    spark.read.parquet("region.parquet").createOrReplaceTempView("region")
   }
 }

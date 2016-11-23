@@ -4,7 +4,7 @@ import java.io.{File, FileWriter, PrintWriter}
 import java.text.SimpleDateFormat
 import java.sql.Date
 
-import me.yongshang.cbfm.{MDBF, FullBitmapIndex, CBFM}
+import me.yongshang.cbfm.{CMDBF, MDBF, FullBitmapIndex, CBFM}
 import org.apache.spark.deploy.SparkHadoopUtil
 import org.apache.spark.sql.SparkSession
 import org.apache.thrift.protocol.TType
@@ -16,7 +16,7 @@ object DataGenerator {
   val blockSize = 1 * 1024 * 1024
   val spark = SparkSession
     .builder
-    .appName("TPC-H data generator")
+    .appName("Skip Test")
     .config("parquet.task.side.metadata", true)
     .config("parquet.enable.dictionary",false)
 //    .config("parquet.block.size", blockSize)
@@ -25,19 +25,7 @@ object DataGenerator {
 
   def setUpCBFM(on: Boolean): Unit ={
     CBFM.DEBUG = false
-    CBFM.ON = on
-    CBFM.desired_false_positive_probability_ = 0.1
-    // customer
-//        CBFM.setIndexedDimensions(Array("c_custkey", "c_nationkey", "c_mksegment"))
-//        CBFM.reducedimensions = Array(6)
-
-    // partsupp
-    CBFM.setIndexedDimensions(Array("ps_partkey", "ps_suppkey", "ps_supplycost"))
-    CBFM.reducedimensions = Array(3)
-
-    // lineitem
-//    CBFM.setIndexedDimensions(Array("l_orderkey", "l_partkey", "l_suppkey"))
-//    CBFM.reducedimensions = Array(3)
+    CBFM.ON = false
   }
 
   def setUpBitmapCBFM(on: Boolean, dimensions: Array[String], reduced: Array[Array[String]]): Unit ={
@@ -52,6 +40,12 @@ object DataGenerator {
     MDBF.dimensions = dimensions;
   }
 
+  def setUpCMDBF(on: Boolean, dimensions: Array[String]): Unit ={
+    CMDBF.ON = on;
+    CMDBF.desiredFalsePositiveProbability = 0.1;
+    CMDBF.dimensions = dimensions;
+  }
+
   def generateFile(dir: String): Unit ={
     val dirPath = dir
 
@@ -63,23 +57,23 @@ object DataGenerator {
         , attrs(6), attrs(7).toDouble, attrs(8)))
     val partDF = spark.createDataFrame(part)
     partDF.write.parquet("part.parquet")
-//
-//    val supplier = spark.sparkContext
-//      .textFile(dirPath+"supplier.tbl")
-//      .map(_.split("\\|"))
-//      .map(attrs => Supplier(attrs(0).toInt, attrs(1), attrs(2)
-//        , attrs(3), attrs(4), attrs(5).toDouble
-//        , attrs(6)))
-//    val supplierDF = spark.createDataFrame(supplier)
-//    supplierDF.write.parquet("supplier.parquet")
 
-//    val partsupp = spark.sparkContext
-//      .textFile(dirPath+"partsupp.tbl")
-//      .map(_.split("\\|"))
-//      .map(attrs => Partsupp(attrs(0).toInt, attrs(1).toInt, attrs(2).toInt
-//        , attrs(3).toDouble, attrs(4)))
-//    val partsuppDF = spark.createDataFrame(partsupp)
-//    partsuppDF.write.parquet("partsupp.parquet")
+    val supplier = spark.sparkContext
+      .textFile(dirPath+"supplier.tbl")
+      .map(_.split("\\|"))
+      .map(attrs => Supplier(attrs(0).toInt, attrs(1), attrs(2)
+        , attrs(3), attrs(4), attrs(5).toDouble
+        , attrs(6)))
+    val supplierDF = spark.createDataFrame(supplier)
+    supplierDF.write.parquet("supplier.parquet")
+
+    val partsupp = spark.sparkContext
+      .textFile(dirPath+"partsupp.tbl")
+      .map(_.split("\\|"))
+      .map(attrs => Partsupp(attrs(0).toInt, attrs(1).toInt, attrs(2).toInt
+        , attrs(3).toDouble, attrs(4)))
+    val partsuppDF = spark.createDataFrame(partsupp)
+    partsuppDF.write.parquet("partsupp.parquet")
 
 //    val customer = spark.sparkContext
 //      .textFile(dirPath+"customer.tbl")
@@ -99,32 +93,43 @@ object DataGenerator {
 //    val ordersDF = spark.createDataFrame(orders)
 //    ordersDF.write.parquet("orders.parquet")
 //
-//    val lineitem = spark.sparkContext
-//      .textFile(dirPath+"lineitem.tbl")
-//      .map(_.split("\\|"))
-//      .map(attrs => Lineitem(attrs(0).toInt, attrs(1).toInt, attrs(2).toInt
-//        , attrs(3).toInt, attrs(4).toDouble, attrs(5).toDouble
-//        , attrs(6).toDouble, attrs(7).toDouble, attrs(8)
-//        , attrs(9), Date.valueOf(attrs(10)), Date.valueOf(attrs(11))
-//        , Date.valueOf(attrs(12)), attrs(13), attrs(14)
-//        , attrs(15)))
-//    val lineitemDF = spark.createDataFrame(lineitem)
-//    lineitemDF.write.parquet("lineitem.parquet")
-//
-//    val nation = spark.sparkContext
-//      .textFile(dirPath+"nation.tbl")
-//      .map(_.split("\\|"))
-//      .map(attrs => Nation(attrs(0).toInt, attrs(1), attrs(2)
-//        , attrs(3)))
-//    val nationDF = spark.createDataFrame(nation)
-//    nationDF.write.parquet("nation.parquet")
-//
-//    val region = spark.sparkContext
-//      .textFile(dirPath+"region.tbl")
-//      .map(_.split("\\|"))
-//      .map(attrs => Region(attrs(0).toInt, attrs(1), attrs(2)))
-//    val regionDF = spark.createDataFrame(region)
-//    regionDF.write.parquet("region.parquet")
+    val lineitem = spark.sparkContext
+      .textFile(dirPath+"lineitem.tbl")
+      .map(_.split("\\|"))
+      .map(attrs => Lineitem(attrs(0).toInt, attrs(1).toInt, attrs(2).toInt
+        , attrs(3).toInt, attrs(4).toDouble, attrs(5).toDouble
+        , attrs(6).toDouble, attrs(7).toDouble, attrs(8)
+        , attrs(9), Date.valueOf(attrs(10)), Date.valueOf(attrs(11))
+        , Date.valueOf(attrs(12)), attrs(13), attrs(14)
+        , attrs(15)))
+    val lineitemDF = spark.createDataFrame(lineitem)
+    lineitemDF.write.parquet("lineitem.parquet")
+
+    val nation = spark.sparkContext
+      .textFile(dirPath+"nation.tbl")
+      .map(_.split("\\|"))
+      .map(attrs => Nation(attrs(0).toInt, attrs(1), attrs(2)
+        , attrs(3)))
+    val nationDF = spark.createDataFrame(nation)
+    nationDF.write.parquet("nation.parquet")
+
+    val region = spark.sparkContext
+      .textFile(dirPath+"region.tbl")
+      .map(_.split("\\|"))
+      .map(attrs => Region(attrs(0).toInt, attrs(1), attrs(2)))
+    val regionDF = spark.createDataFrame(region)
+    regionDF.write.parquet("region.parquet")
+  }
+
+  def readAndCreateTable(): Unit ={
+    spark.read.parquet("part.parquet").createOrReplaceTempView("part")
+    spark.read.parquet("supplier.parquet").createOrReplaceTempView("supplier")
+    spark.read.parquet("partsupp.parquet").createOrReplaceTempView("partsupp")
+    //    spark.read.parquet("customer.parquet").createOrReplaceTempView("customer")
+    //    spark.read.parquet("orders.parquet").createOrReplaceTempView("orders")
+    spark.read.parquet("lineitem.parquet").createOrReplaceTempView("lineitem")
+    spark.read.parquet("nation.parquet").createOrReplaceTempView("nation")
+    spark.read.parquet("region.parquet").createOrReplaceTempView("region")
   }
 
   def main(args: Array[String]): Unit = {
