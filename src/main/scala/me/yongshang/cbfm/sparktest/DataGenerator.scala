@@ -49,31 +49,31 @@ object DataGenerator {
   def generateFile(dir: String): Unit ={
     val dirPath = dir
 
-    val part = spark.sparkContext
-      .textFile(dirPath+"part.tbl")
-      .map(_.split("\\|"))
-      .map(attrs => Part(attrs(0).toInt, attrs(1), attrs(2)
-        , attrs(3), attrs(4), attrs(5).toInt
-        , attrs(6), attrs(7).toDouble, attrs(8)))
-    val partDF = spark.createDataFrame(part)
-    partDF.write.parquet("part.parquet")
-
-    val supplier = spark.sparkContext
-      .textFile(dirPath+"supplier.tbl")
-      .map(_.split("\\|"))
-      .map(attrs => Supplier(attrs(0).toInt, attrs(1), attrs(2)
-        , attrs(3), attrs(4), attrs(5).toDouble
-        , attrs(6)))
-    val supplierDF = spark.createDataFrame(supplier)
-    supplierDF.write.parquet("supplier.parquet")
-
-    val partsupp = spark.sparkContext
-      .textFile(dirPath+"partsupp.tbl")
-      .map(_.split("\\|"))
-      .map(attrs => Partsupp(attrs(0).toInt, attrs(1).toInt, attrs(2).toInt
-        , attrs(3).toDouble, attrs(4)))
-    val partsuppDF = spark.createDataFrame(partsupp)
-    partsuppDF.write.parquet("partsupp.parquet")
+//    val part = spark.sparkContext
+//      .textFile(dirPath+"part.tbl")
+//      .map(_.split("\\|"))
+//      .map(attrs => Part(attrs(0).toInt, attrs(1), attrs(2)
+//        , attrs(3), attrs(4), attrs(5).toInt
+//        , attrs(6), attrs(7).toDouble, attrs(8)))
+//    val partDF = spark.createDataFrame(part)
+//    partDF.write.parquet("part.parquet")
+//
+//    val supplier = spark.sparkContext
+//      .textFile(dirPath+"supplier.tbl")
+//      .map(_.split("\\|"))
+//      .map(attrs => Supplier(attrs(0).toInt, attrs(1), attrs(2)
+//        , attrs(3), attrs(4), attrs(5).toDouble
+//        , attrs(6)))
+//    val supplierDF = spark.createDataFrame(supplier)
+//    supplierDF.write.parquet("supplier.parquet")
+//
+//    val partsupp = spark.sparkContext
+//      .textFile(dirPath+"partsupp.tbl")
+//      .map(_.split("\\|"))
+//      .map(attrs => Partsupp(attrs(0).toInt, attrs(1).toInt, attrs(2).toInt
+//        , attrs(3).toDouble, attrs(4)))
+//    val partsuppDF = spark.createDataFrame(partsupp)
+//    partsuppDF.write.parquet("partsupp.parquet")
 
 //    val customer = spark.sparkContext
 //      .textFile(dirPath+"customer.tbl")
@@ -103,22 +103,23 @@ object DataGenerator {
         , Date.valueOf(attrs(12)), attrs(13), attrs(14)
         , attrs(15)))
     val lineitemDF = spark.createDataFrame(lineitem)
-    lineitemDF.write.parquet("lineitem.parquet")
+    lineitemDF.createOrReplaceTempView("lineitem")
+//    lineitemDF.write.parquet("lineitem.parquet")
 
-    val nation = spark.sparkContext
-      .textFile(dirPath+"nation.tbl")
-      .map(_.split("\\|"))
-      .map(attrs => Nation(attrs(0).toInt, attrs(1), attrs(2)
-        , attrs(3)))
-    val nationDF = spark.createDataFrame(nation)
-    nationDF.write.parquet("nation.parquet")
-
-    val region = spark.sparkContext
-      .textFile(dirPath+"region.tbl")
-      .map(_.split("\\|"))
-      .map(attrs => Region(attrs(0).toInt, attrs(1), attrs(2)))
-    val regionDF = spark.createDataFrame(region)
-    regionDF.write.parquet("region.parquet")
+//    val nation = spark.sparkContext
+//      .textFile(dirPath+"nation.tbl")
+//      .map(_.split("\\|"))
+//      .map(attrs => Nation(attrs(0).toInt, attrs(1), attrs(2)
+//        , attrs(3)))
+//    val nationDF = spark.createDataFrame(nation)
+//    nationDF.write.parquet("nation.parquet")
+//
+//    val region = spark.sparkContext
+//      .textFile(dirPath+"region.tbl")
+//      .map(_.split("\\|"))
+//      .map(attrs => Region(attrs(0).toInt, attrs(1), attrs(2)))
+//    val regionDF = spark.createDataFrame(region)
+//    regionDF.write.parquet("region.parquet")
   }
 
   def readAndCreateTable(): Unit ={
