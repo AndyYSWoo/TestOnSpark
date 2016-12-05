@@ -19,8 +19,8 @@ object TpchQuery {
     RowGroupFilter.filePath = args(1)
 
     // Dimensions
-    val dimensions = Array("p_size", "p_brand", "p_container")
-    val reduced: Array[Array[String]] =  Array(Array("p_size", "p_container"))
+    val dimensions = Array("p_type", "p_brand", "p_container")
+    val reduced: Array[Array[String]] =  Array(Array("p_type", "p_container"))
 
     // Load & denormalize tables
     val denormalized = loadDataAndDenormalize()
@@ -32,12 +32,20 @@ object TpchQuery {
     DataGenerator.setUpMDBF(index.equals("mdbf"), dimensions)
     DataGenerator.setUpCMDBF(index.equals("cmdbf"), dimensions)
 
+    /* DEBUG USAGE: SINGLE TABLE
+    DataGenerator.generateFile(dataSourceFolder)
+    DataGenerator.readAndCreateTable()
+    */
+
     // Write out with index
-    denormalized.write.parquet("denormalized.parquet")
+//    denormalized.write.parquet("denormalized.parquet")
 
     // Read denormalized table & query
     spark.read.parquet("denormalized.parquet").createOrReplaceTempView("denormalized")
-    var testQuery = "SELECT SUM(l_extendedprice) / 7.0 AS avg_yearly FROM denormalized WHERE p_size=7 AND p_brand = 'Brand#12' AND p_container = 'SM BAG' AND l_quantity < ( SELECT 0.2 * AVG(l_quantity) FROM lineitem WHERE l_partkey = p_partkey )"
+
+    /*
+    var testQuery = "SELECT SUM(l_extendedprice) / 7.0 AS avg_yearly FROM denormalized WHERE p_brand = 'Brand#55' AND p_container = 'SM BAG' AND l_quantity < ( SELECT 0.2 * AVG(l_quantity) FROM lineitem WHERE l_partkey = p_partkey )"
+    testQuery = "select DATE_FORMAT(o_orderdate, '%Y') as o_year, l_extendedprice * (1 - l_discount) as volume, n2.n_name as nation from denormalized, nation n1, nation n2, region where c_nationkey = n1.n_nationkey and n1.n_regionkey = r_regionkey and r_name = 'ASIA' and s_nationkey = n2.n_nationkey and o_orderdate between date '1995-01-01' and date '1996-12-31'\n\t\t\tand p_type = 'PROMO BURNISHED TIN'"
     val query = "17"
     RowGroupFilter.query = query
 
@@ -50,22 +58,18 @@ object TpchQuery {
     val result = spark.sql(testQuery)
     val rowCount = result.count()
     val time = System.currentTimeMillis() - start
-    result.explain()
     totalTime += time
     pw.write("query index denormalized: "+time + " ms. "+rowCount+"rows returned\n")
     pw.write("=======\n")
     pw.write("\tavg: " + (totalTime / 1))
     pw.flush
     pw.close
+    */
 
-    collectResults(query)
-
-    // Generate parquet files & register table
-//    DataGenerator.generateFile(dataSourceFolder)
-//    DataGenerator.readAndCreateTable()
-//    val queryCount = 1
-//    queryAndRecord("2", queryCount)
-//    queryAndRecord("17", queryCount)
+    // Query
+    val queryCount = 1
+    queryAndRecord("8", queryCount)
+    queryAndRecord("17", queryCount)
   }
 
   def loadDataAndDenormalize(): DataFrame ={
@@ -94,6 +98,24 @@ object TpchQuery {
         , attrs(3).toDouble, attrs(4)))
     val partsuppDF = spark.createDataFrame(partsupp)
     partsuppDF.createOrReplaceTempView("partsupp")
+
+    val customer = spark.sparkContext
+      .textFile(dataSourceFolder+"customer.tbl")
+      .map(_.split("\\|"))
+      .map(attrs => Customer(attrs(0).toInt, attrs(1), attrs(2)
+        , attrs(3).toInt, attrs(4), attrs(5).toDouble
+        , attrs(6), attrs(7)))
+    val customerDF = spark.createDataFrame(customer)
+    customerDF.createOrReplaceTempView("customer")
+
+    val orders = spark.sparkContext
+      .textFile(dataSourceFolder+"orders.tbl")
+      .map(_.split("\\|"))
+      .map(attrs => Orders(attrs(0).toInt, attrs(1).toInt, attrs(2)
+        , attrs(3).toDouble, Date.valueOf(attrs(4)), attrs(5)
+        , attrs(6), attrs(7), attrs(8)))
+    val ordersDF = spark.createDataFrame(orders)
+    ordersDF.createOrReplaceTempView("orders")
 
     val lineitem = spark.sparkContext
       .textFile(dataSourceFolder+"lineitem.tbl")
@@ -124,25 +146,12 @@ object TpchQuery {
 
     val joinQuery =
       "SELECT * FROM " +
-      "part LEFT OUTER JOIN lineitem ON p_partkey=l_partkey " +
-           "LEFT OUTER JOIN partsupp ON p_partkey=ps_partkey " +
-           "RIGHT OUTER JOIN supplier ON ps_suppkey=s_suppkey " +
-           "JOIN nation ON s_nationkey=n_nationkey " +
-           "JOIN region ON n_nationkey=r_regionkey"
+        "part LEFT OUTER JOIN lineitem ON p_partkey=l_partkey " +
+        "JOIN supplier ON l_suppkey=s_suppkey " +
+        "JOIN orders ON o_orderkey=l_orderkey " +
+        "JOIN customer ON o_custkey=c_custkey"
     spark.sql(joinQuery).createOrReplaceTempView("denormalized")
     spark.table("denormalized")
-/*
-    var denormalized = partDF
-      .join(lineitemDF, partDF("p_partkey") === lineitemDF("l_partkey"), "leftouter")
-    denormalized = denormalized
-      .join(partsuppDF, denormalized("p_partkey") === partsuppDF("ps_partkey"), "leftouter")
-    denormalized = denormalized
-      .join(supplierDF, denormalized("ps_suppkey") === supplierDF("s_suppkey"), "rightouter")
-    denormalized = denormalized
-      .join(nationDF, denormalized("s_nationkey") === nationDF("n_nationkey"))
-    denormalized = denormalized
-      .join(regionDF, denormalized("n_regionkey") === regionDF("r_regionkey"))
-    denormalized*/
   }
 
   def loadQueries(queryPath: String): Array[String] ={
@@ -175,9 +184,12 @@ object TpchQuery {
 
     pw.flush
     pw.close
+
+    // Collect result
+    collectResults(query, count)
   }
 
-  def collectResults(query: String): Unit ={
+  def collectResults(query: String, queryCount: Int): Unit ={
     // index load time
     var path = RowGroupFilter.filePath + "query" + query + "-index-load-time"
     var recordFile = new File(path)
@@ -195,7 +207,8 @@ object TpchQuery {
       val pw = new PrintWriter(new FileWriter(recordFile, true))
       pw.write("=======\n")
       pw.write("total: "+totalTime+" ms\n")
-      pw.write("avg: "+(totalTime/count)+" ms\n")
+      pw.write("per query: "+(totalTime/queryCount)+" ms\n")
+      pw.write("per block: "+(totalTime/count)+" ms\n")
       pw.flush
       pw.close
     }
@@ -240,7 +253,8 @@ object TpchQuery {
       val pw = new PrintWriter(new FileWriter(recordFile, true))
       pw.write("=======\n")
       pw.write("total: "+totalTime+" ms\n")
-      pw.write("avg: "+(totalTime/count)+" ms\n")
+      pw.write("per query: "+(totalTime/queryCount)+" ms\n")
+      pw.write("per block: "+(totalTime/count)+" ms\n")
       pw.flush
       pw.close
     }
@@ -260,7 +274,7 @@ object TpchQuery {
       val pw = new PrintWriter(new FileWriter(recordFile, true))
       pw.write("=======\n")
       pw.write("total: "+totalSpace+" MB\n")
-      pw.write("avg: "+(totalSpace/count)+" MB\n")
+      pw.write("per block: "+(totalSpace/count)+" MB\n")
       pw.flush
       pw.close
     }

@@ -49,14 +49,14 @@ object DataGenerator {
   def generateFile(dir: String): Unit ={
     val dirPath = dir
 
-//    val part = spark.sparkContext
-//      .textFile(dirPath+"part.tbl")
-//      .map(_.split("\\|"))
-//      .map(attrs => Part(attrs(0).toInt, attrs(1), attrs(2)
-//        , attrs(3), attrs(4), attrs(5).toInt
-//        , attrs(6), attrs(7).toDouble, attrs(8)))
-//    val partDF = spark.createDataFrame(part)
-//    partDF.write.parquet("part.parquet")
+    val part = spark.sparkContext
+      .textFile(dirPath+"part.tbl")
+      .map(_.split("\\|"))
+      .map(attrs => Part(attrs(0).toInt, attrs(1), attrs(2)
+        , attrs(3), attrs(4), attrs(5).toInt
+        , attrs(6), attrs(7).toDouble, attrs(8)))
+    val partDF = spark.createDataFrame(part)
+    partDF.write.parquet("part.parquet")
 //
 //    val supplier = spark.sparkContext
 //      .textFile(dirPath+"supplier.tbl")
@@ -124,13 +124,13 @@ object DataGenerator {
 
   def readAndCreateTable(): Unit ={
     spark.read.parquet("part.parquet").createOrReplaceTempView("part")
-    spark.read.parquet("supplier.parquet").createOrReplaceTempView("supplier")
-    spark.read.parquet("partsupp.parquet").createOrReplaceTempView("partsupp")
+//    spark.read.parquet("supplier.parquet").createOrReplaceTempView("supplier")
+//    spark.read.parquet("partsupp.parquet").createOrReplaceTempView("partsupp")
     //    spark.read.parquet("customer.parquet").createOrReplaceTempView("customer")
     //    spark.read.parquet("orders.parquet").createOrReplaceTempView("orders")
-    spark.read.parquet("lineitem.parquet").createOrReplaceTempView("lineitem")
-    spark.read.parquet("nation.parquet").createOrReplaceTempView("nation")
-    spark.read.parquet("region.parquet").createOrReplaceTempView("region")
+//    spark.read.parquet("lineitem.parquet").createOrReplaceTempView("lineitem")
+//    spark.read.parquet("nation.parquet").createOrReplaceTempView("nation")
+//    spark.read.parquet("region.parquet").createOrReplaceTempView("region")
   }
 
   def main(args: Array[String]): Unit = {
