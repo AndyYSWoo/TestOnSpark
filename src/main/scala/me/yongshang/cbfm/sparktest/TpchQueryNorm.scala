@@ -1,35 +1,48 @@
 package me.yongshang.cbfm.sparktest
 
-import java.io._
+import java.io.{FileWriter, PrintWriter, File}
 import java.nio.file.{Paths, Files}
+import java.sql.Date
+
 import org.apache.commons.io.IOUtils
 import org.apache.hadoop.conf.Configuration
-import org.apache.hadoop.fs.{FileSystem, Path}
-
+import org.apache.hadoop.fs.{Path, FileSystem}
+import org.apache.parquet.filter2.compat.RowGroupFilter
+import org.apache.spark.sql._
 import sys.process._
 
 /**
-  * Created by yongshangwu on 2016/12/8.
+  * Created by yongshangwu on 2016/12/13.
   */
-object DnsQuery {
+object TpchQueryNorm {
   val spark = DataGenerator.spark
+  var dataSourceFolder: String = null
+  var fs: FileSystem = null
 
   var index: String = null
-  var dataSourceFolder: String = null
-  var parquetPath: String = null
   var localDir: String = null
-  var fs: FileSystem = null
-  def main(args: Array[String]): Unit = {
-    dataSourceFolder = "hdfs://server1:9000/data/dns/"
-    index = args(1)
-    parquetPath = args(2)+"dns.parquet"
-    localDir = "/Users/yongshagnwu/work/result/"+index+"/"
+  var parquetDir: String = null
+  def main(args: Array[String]) {
+    // File path config
+    dataSourceFolder = args(0)
+    RowGroupFilter.filePath = args(1)
+    parquetDir = args(3)
 
     // Dimensions
-    val dimensions = Array("sip", "dip", "nip")
-    val reduced: Array[Array[String]] =  Array(Array("dip", "nip"))
+    val dimensions = Array("p_type", "p_brand", "p_container")
+    val reduced: Array[Array[String]] =  Array(Array("p_type", "p_container"))
 
-    loadAndWrite()
+    // Set up indexes
+    index = args(2)
+    localDir = "/Users/yongshangwu/work/result/"+index+"/"
+
+    DataGenerator.setUpCBFM(false)
+    DataGenerator.setUpBitmapCBFM(index.equals("cbfm"), dimensions, reduced)
+    DataGenerator.setUpMDBF(index.equals("mdbf"), dimensions)
+    DataGenerator.setUpCMDBF(index.equals("cmdbf"), dimensions)
+
+    // Load tables
+    load(true)
 
     // Gather files, ugly hack
     ("rm -rf "+localDir+"index-create-time").!
@@ -42,24 +55,11 @@ object DnsQuery {
       (("cat "+localDir+"is"+i) #>> new File(localDir+"index-space")).!
     }
 
-    spark.read.parquet(parquetPath).createOrReplaceTempView("dns")
-
+    // Query
     setupFS()
-    queryAndRecord("1", 1)
-    queryAndRecord("2", 1)
-  }
-  def loadAndWrite(): Unit ={
-    val dns = spark.sparkContext
-      .textFile(dataSourceFolder+"result")
-      .map(_.split("\t"))
-      .map(tokens => Dns(tokens(0), tokens(1), tokens(2), tokens(3),
-        tokens(4).toInt, tokens(5).toInt, tokens(6).toLong, tokens(7).toLong,
-        tokens(8),tokens(9).toInt, tokens(10).toInt, tokens(11),
-        tokens(12).toInt, tokens(13).toInt, tokens(14).toInt, tokens(15).toInt,
-        tokens(16), tokens(17), tokens(18), tokens(19),
-        tokens(20), tokens(21)))
-    val dnsDF = spark.createDataFrame(dns)
-    dnsDF.write.parquet(parquetPath)
+    val queryCount = 1
+    queryAndRecord("8", queryCount)
+    queryAndRecord("17", queryCount)
   }
 
   def setupFS(): Unit ={
@@ -68,16 +68,101 @@ object DnsQuery {
     fs = FileSystem.get(conf)
   }
 
+  def load(write: Boolean): Unit ={
+    if(write){
+      val part = spark.sparkContext
+        .textFile(dataSourceFolder+"part.tbl")
+        .map(_.split("\\|"))
+        .map(attrs => Part(attrs(0).toInt, attrs(1), attrs(2)
+          , attrs(3), attrs(4), attrs(5).toInt
+          , attrs(6), attrs(7).toDouble, attrs(8)))
+      val partDF = spark.createDataFrame(part)
+      partDF.write.parquet(parquetDir+"part.parquet")
+
+      val supplier = spark.sparkContext
+        .textFile(dataSourceFolder+"supplier.tbl")
+        .map(_.split("\\|"))
+        .map(attrs => Supplier(attrs(0).toInt, attrs(1), attrs(2)
+          , attrs(3), attrs(4), attrs(5).toDouble
+          , attrs(6)))
+      val supplierDF = spark.createDataFrame(supplier)
+      supplierDF.write.parquet(parquetDir+"supplier.parquet")
+
+
+      val partsupp = spark.sparkContext
+        .textFile(dataSourceFolder+"partsupp.tbl")
+        .map(_.split("\\|"))
+        .map(attrs => Partsupp(attrs(0).toInt, attrs(1).toInt, attrs(2).toInt
+          , attrs(3).toDouble, attrs(4)))
+      val partsuppDF = spark.createDataFrame(partsupp)
+      partsuppDF.write.parquet(parquetDir+"partsupp.parquet")
+
+      val customer = spark.sparkContext
+        .textFile(dataSourceFolder+"customer.tbl")
+        .map(_.split("\\|"))
+        .map(attrs => Customer(attrs(0).toInt, attrs(1), attrs(2)
+          , attrs(3).toInt, attrs(4), attrs(5).toDouble
+          , attrs(6), attrs(7)))
+      val customerDF = spark.createDataFrame(customer)
+      customerDF.write.parquet(parquetDir+"customer.parquet")
+
+      val orders = spark.sparkContext
+        .textFile(dataSourceFolder+"orders.tbl")
+        .map(_.split("\\|"))
+        .map(attrs => Orders(attrs(0).toInt, attrs(1).toInt, attrs(2)
+          , attrs(3).toDouble, Date.valueOf(attrs(4)), attrs(5)
+          , attrs(6), attrs(7), attrs(8)))
+      val ordersDF = spark.createDataFrame(orders)
+      ordersDF.write.parquet(parquetDir+"orders.parquet")
+
+      val lineitem = spark.sparkContext
+        .textFile(dataSourceFolder+"lineitem.tbl")
+        .map(_.split("\\|"))
+        .map(attrs => Lineitem(attrs(0).toInt, attrs(1).toInt, attrs(2).toInt
+          , attrs(3).toInt, attrs(4).toDouble, attrs(5).toDouble
+          , attrs(6).toDouble, attrs(7).toDouble, attrs(8)
+          , attrs(9), Date.valueOf(attrs(10)), Date.valueOf(attrs(11))
+          , Date.valueOf(attrs(12)), attrs(13), attrs(14)
+          , attrs(15)))
+      val lineitemDF = spark.createDataFrame(lineitem)
+      lineitemDF.write.parquet(parquetDir+"lineitem.parquet")
+
+      val nation = spark.sparkContext
+        .textFile(dataSourceFolder+"nation.tbl")
+        .map(_.split("\\|"))
+        .map(attrs => Nation(attrs(0).toInt, attrs(1), attrs(2)
+          , attrs(3)))
+      val nationDF = spark.createDataFrame(nation)
+      nationDF.write.parquet(parquetDir+"nation.parquet")
+
+      val region = spark.sparkContext
+        .textFile(dataSourceFolder+"region.tbl")
+        .map(_.split("\\|"))
+        .map(attrs => Region(attrs(0).toInt, attrs(1), attrs(2)))
+      val regionDF = spark.createDataFrame(region)
+      regionDF.write.parquet(parquetDir+"region.parquet")
+    }
+
+    spark.read.parquet(parquetDir+"part.parquet").createOrReplaceTempView("part")
+    spark.read.parquet(parquetDir+"supplier.parquet").createOrReplaceTempView("supplier")
+    spark.read.parquet(parquetDir+"partsupp.parquet").createOrReplaceTempView("partsupp")
+    spark.read.parquet(parquetDir+"customer.parquet").createOrReplaceTempView("customer")
+    spark.read.parquet(parquetDir+"orders.parquet").createOrReplaceTempView("orders")
+    spark.read.parquet(parquetDir+"lineitem.parquet").createOrReplaceTempView("lineitem")
+    spark.read.parquet(parquetDir+"nation.parquet").createOrReplaceTempView("nation")
+    spark.read.parquet(parquetDir+"region.parquet").createOrReplaceTempView("region")
+  }
+
   def loadQueries(queryPath: String): Array[String] ={
     val file = fs.open(new Path(queryPath))
-    val fileContent = new String(IOUtils.toByteArray(file))
+    val fileContent = new String(IOUtils.toByteArray(file));
     val queries = fileContent.split("====")
     queries
   }
+
   def queryAndRecord(query: String, count: Int): Unit ={
     // Writer
     val file = new File(localDir + "query"+query+"-time")
-    if(file.exists()) file.delete()
     file.createNewFile()
     val pw = new PrintWriter(new FileWriter(file))
 
@@ -88,7 +173,7 @@ object DnsQuery {
     for (i <- 0 until count) {
       val start = System.currentTimeMillis()
       val result = spark.sql(queries(i))
-      val rowCount = result.count()
+      val rowCount = result.count();
       val time = System.currentTimeMillis() - start
       totalTime += time
       pw.write("query index "+i+": "+time + " ms. "+rowCount+"rows returned\n")
@@ -125,6 +210,7 @@ object DnsQuery {
     if(file.exists()){
       val content = new String(Files.readAllBytes(Paths.get(path)))
       val lines = content.split("\n")
+      var line: String = null
       var totalTime: Double = 0.0
       var count = 0
       for(line <- lines){
@@ -240,9 +326,3 @@ object DnsQuery {
   }
 
 }
-case class Dns(rip: String, sip: String, dip: String, nip: String,
-               input: Int, output: Int, packets: Long, bytes: Long,
-               time: String, sport: Int, dport: Int, flags: String,
-               proto: Int, tos: Int, sas: Int, das: Int,
-               scc: String, dcc: String, province: String, operator: String,
-               spc: String, dpc: String)

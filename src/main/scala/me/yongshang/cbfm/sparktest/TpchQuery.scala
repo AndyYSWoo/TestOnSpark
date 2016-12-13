@@ -9,7 +9,7 @@ import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{Path, FileSystem}
 import org.apache.parquet.filter2.compat.RowGroupFilter
 import org.apache.spark.sql.DataFrame
-
+import sys.process._
 /**
   * Created by yongshangwu on 2016/11/22.
   */
@@ -17,11 +17,16 @@ object TpchQuery {
   val spark = DataGenerator.spark
   var dataSourceFolder: String = null
   var fs: FileSystem = null
+
+  var index: String = null
+  var localDir: String = null
+  var parquetDir: String = null
   def main(args: Array[String]) {
     // File path config
     dataSourceFolder = args(0)
     RowGroupFilter.filePath = args(1)
-
+    parquetDir = args(3)
+    
     // Dimensions
     val dimensions = Array("p_type", "p_brand", "p_container")
     val reduced: Array[Array[String]] =  Array(Array("p_type", "p_container"))
@@ -30,20 +35,31 @@ object TpchQuery {
     val denormalized = loadDataAndDenormalize()
 
     // Set up indexes
-    val index = args(2)
+    index = args(2)
+    localDir = "/Users/yongshangwu/work/result/"+index+"/"
+
     DataGenerator.setUpCBFM(false)
     DataGenerator.setUpBitmapCBFM(index.equals("cbfm"), dimensions, reduced)
     DataGenerator.setUpMDBF(index.equals("mdbf"), dimensions)
     DataGenerator.setUpCMDBF(index.equals("cmdbf"), dimensions)
 
     // Write out with index
-    val parquetDir = args(3)
     val parquetFile = parquetDir+"denormalized.parquet"
     denormalized.write.parquet(parquetFile)
 
+    // Gather files, ugly hack
+    ("rm -rf "+localDir+"index-create-time").!
+    ("rm -rf "+localDir+"index-space").!
+    var i = 1
+    for(i <- 1 to 3){
+      ("scp yongshangwu@server"+i+":/opt/record/"+index+"/index-create-time "+localDir+"ict"+i).!
+      (("cat "+localDir+"ict"+i) #>> new File(localDir+"index-create-time")).!
+      ("scp yongshangwu@server"+i+":/opt/record/"+index+"/index-space "+localDir+"is"+i).!
+      (("cat "+localDir+"is"+i) #>> new File(localDir+"index-space")).!
+    }
+
     // Read denormalized table & query
     spark.read.parquet(parquetFile).createOrReplaceTempView("denormalized")
-
     // Query
     setupFS()
     val queryCount = 1
@@ -53,7 +69,7 @@ object TpchQuery {
 
   def setupFS(): Unit ={
     val conf = new Configuration()
-    conf.set("fs.defaultFS", "hdfs://tina:9000")
+    conf.set("fs.defaultFS", "hdfs://server1:9000")
     fs = FileSystem.get(conf)
   }
 
@@ -148,9 +164,9 @@ object TpchQuery {
 
   def queryAndRecord(query: String, count: Int): Unit ={
     // Writer
-    val timePath = new Path(RowGroupFilter.filePath + "query"+query+"-time")
-    val output = fs.create(timePath)
-    val pw = new PrintWriter(output)
+    val file = new File(localDir + "query"+query+"-time")
+    file.createNewFile()
+    val pw = new PrintWriter(new FileWriter(file))
 
     // Query
     val queries = loadQueries(dataSourceFolder + "queries"+query+".sql")
@@ -172,25 +188,46 @@ object TpchQuery {
 
     // Collect result
     collectResults(query, count)
+    for(i <- 1 to 3){
+      ("scp /Users/yongshangwu/work/result/blank yongshangwu@server"+i+":/opt/record/"+index+"/index-load-time").!
+      ("scp /Users/yongshangwu/work/result/blank yongshangwu@server"+i+":/opt/record/"+index+"/skip").!
+    }
   }
 
   def collectResults(query: String, queryCount: Int): Unit ={
+    var i = 1
+    ("rm -rf "+localDir+"query"+query+"-index-load-time").!
+    ("rm -rf "+localDir+"query"+query+"-skip").!
+
+    for(i <- 1 to 3){
+      ("scp yongshangwu@server"+i+":/opt/record/"+index+"/index-load-time "+localDir+"query"+query+"-ilt"+i).!
+      (("cat "+localDir+"query"+query+"-ilt"+i) #>> new File(localDir+"query"+query+"-index-load-time")).!
+
+      ("scp yongshangwu@server"+i+":/opt/record/"+index+"/skip "+localDir+"query"+query+"-sk"+i).!
+      (("cat "+localDir+"query"+query+"-sk"+i) #>> new File(localDir+"query"+query+"-skip")).!
+    }
     // index load time
-    var path = new Path(RowGroupFilter.filePath + "query" + query + "-index-load-time")
-    if(fs.exists(path)){
-      val in = fs.open(path)
-      val content = new String(IOUtils.toByteArray(in))
-      in.close
+    var path = localDir + "query"+ query +"-index-load-time"
+    var file = new File(path)
+    if(file.exists()){
+      val content = new String(Files.readAllBytes(Paths.get(path)))
       val lines = content.split("\n")
       var line: String = null
       var totalTime: Double = 0.0
       var count = 0
       for(line <- lines){
-        totalTime += Integer.valueOf(line.split(" ")(0))
-        count += 1
+        if(line.startsWith("=")
+          || line.startsWith("total:")
+          || line.startsWith("per")){
+          totalTime = 0.0
+          count = 0
+        }else{
+          totalTime += Integer.valueOf(line.split(" ")(0))
+          count += 1
+        }
       }
 
-      val pw = new PrintWriter(fs.append(path))
+      val pw = new PrintWriter(new FileWriter(file, true))
       pw.write("=======\n")
       pw.write("total: "+totalTime+" ms\n")
       pw.write("per query: "+(totalTime/queryCount)+" ms\n")
@@ -200,24 +237,32 @@ object TpchQuery {
     }
 
     // skip
-    path = new Path(RowGroupFilter.filePath + "query" + query + "-skip")
-    if(fs.exists(path)){
-      val in = fs.open(path)
-      val lines = new String(IOUtils.toByteArray(in)).split("\n")
-      in.close
+    path = localDir +"query" + query + "-skip"
+    file = new File(path)
+    if(file.exists()){
+      val lines = new String(Files.readAllBytes(Paths.get(path))).split("\n")
       var line: String = null
       var totalBlocks = 0
       var skippedBlocks = 0
       var scannedRows = 0
       var skippedRows = 0
       for(line <- lines){
-        val tokens = line.split(" ")
-        totalBlocks += Integer.valueOf(tokens(3))
-        skippedBlocks += Integer.valueOf(tokens(5))
-        scannedRows += Integer.valueOf(tokens(8))
-        skippedRows += Integer.valueOf(tokens(11))
+        if(line.startsWith("=")
+          || line.startsWith("blocks:")
+          || line.startsWith("rows:")){
+          totalBlocks = 0
+          skippedBlocks = 0
+          scannedRows = 0
+          skippedRows = 0
+        }else{
+          val tokens = line.split(" ")
+          totalBlocks += Integer.valueOf(tokens(3))
+          skippedBlocks += Integer.valueOf(tokens(5))
+          scannedRows += Integer.valueOf(tokens(8))
+          skippedRows += Integer.valueOf(tokens(11))
+        }
       }
-      val pw = new PrintWriter(fs.append(path))
+      val pw = new PrintWriter(new FileWriter(file, true))
       pw.write("=======\n")
       pw.write("blocks: total "+totalBlocks+", skipped "+skippedBlocks+", scanned "+(totalBlocks-skippedBlocks)+"\n")
       pw.write("rows: total "+(scannedRows+skippedRows)+", skipped "+skippedRows+", scanned "+scannedRows+"\n")
@@ -226,20 +271,26 @@ object TpchQuery {
     }
 
     // index create time
-    path = new Path(RowGroupFilter.filePath + "index-create-time")
-    if(fs.exists(path)){
-      val in = fs.open(path)
-      val lines = new String(IOUtils.toByteArray(in)).split("\n")
-      in.close
-      if(lines.contains("=======")) return // collect index create time & space only once
+    path = localDir + "index-create-time"
+    file = new File(path)
+    if(file.exists()){
+      val lines = new String(Files.readAllBytes(Paths.get(path))).split("\n")
+      if(lines.contains("=======")) return
       var line: String = null
       var totalTime: Double = 0.0
       var count = 0
       for(line <- lines){
-        totalTime += Integer.valueOf(line.split(" ")(0))
-        count += 1
+        if(line.startsWith("==")
+          || line.startsWith("total")
+          || line.startsWith("per")){
+          totalTime = 0
+          count = 0
+        }else{
+          totalTime += Integer.valueOf(line.split(" ")(0))
+          count += 1
+        }
       }
-      val pw = new PrintWriter(fs.append(path))
+      val pw = new PrintWriter(new FileWriter(file, true))
       pw.write("=======\n")
       pw.write("total: "+totalTime+" ms\n")
       pw.write("per query: "+(totalTime/queryCount)+" ms\n")
@@ -249,19 +300,25 @@ object TpchQuery {
     }
 
     // index space
-    path = new Path(RowGroupFilter.filePath + "index-space")
-    if(fs.exists(path)){
-      val in = fs.open(path)
-      val lines = new String(IOUtils.toByteArray(in)).split("\n")
-      in.close
+    path = localDir + "index-space"
+    file = new File(path)
+    if(file.exists()){
+      val lines = new String(Files.readAllBytes(Paths.get(path))).split("\n")
       var line: String = null
       var totalSpace: Double = 0.0
       var count = 0
       for(line <- lines){
-        totalSpace += java.lang.Double.valueOf(line.split(" ")(0))
-        count += 1
+        if(line.startsWith("==")
+          || line.startsWith("total")
+          || line.startsWith("per")){
+          totalSpace = 0.0
+          count = 0
+        }else{
+          totalSpace += java.lang.Double.valueOf(line.split(" ")(0))
+          count += 1
+        }
       }
-      val pw = new PrintWriter(fs.append(path))
+      val pw = new PrintWriter(new FileWriter(file, true))
       pw.write("=======\n")
       pw.write("total: "+totalSpace+" MB\n")
       pw.write("per block: "+(totalSpace/count)+" MB\n")
@@ -269,4 +326,5 @@ object TpchQuery {
       pw.close
     }
   }
+
 }

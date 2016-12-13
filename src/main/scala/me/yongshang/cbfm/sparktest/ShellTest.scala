@@ -1,37 +1,20 @@
 package me.yongshang.cbfm.sparktest
 
-import java.io._
+import java.io.{FileWriter, PrintWriter, File}
 import java.nio.file.{Paths, Files}
-import org.apache.commons.io.IOUtils
-import org.apache.hadoop.conf.Configuration
-import org.apache.hadoop.fs.{FileSystem, Path}
 
 import sys.process._
-
 /**
-  * Created by yongshangwu on 2016/12/8.
+  * Created by yongshangwu on 2016/12/9.
   */
-object DnsQuery {
-  val spark = DataGenerator.spark
+object ShellTest {
+  def main(args: Array[String]) {
+    val index = "cbfm"
+    val localDir = "/Users/yongshangwu/work/result/" + index + "/"
+    val query = "17"
+    val queryCount = 1
 
-  var index: String = null
-  var dataSourceFolder: String = null
-  var parquetPath: String = null
-  var localDir: String = null
-  var fs: FileSystem = null
-  def main(args: Array[String]): Unit = {
-    dataSourceFolder = "hdfs://server1:9000/data/dns/"
-    index = args(1)
-    parquetPath = args(2)+"dns.parquet"
-    localDir = "/Users/yongshagnwu/work/result/"+index+"/"
 
-    // Dimensions
-    val dimensions = Array("sip", "dip", "nip")
-    val reduced: Array[Array[String]] =  Array(Array("dip", "nip"))
-
-    loadAndWrite()
-
-    // Gather files, ugly hack
     ("rm -rf "+localDir+"index-create-time").!
     ("rm -rf "+localDir+"index-space").!
     var i = 1
@@ -42,73 +25,7 @@ object DnsQuery {
       (("cat "+localDir+"is"+i) #>> new File(localDir+"index-space")).!
     }
 
-    spark.read.parquet(parquetPath).createOrReplaceTempView("dns")
-
-    setupFS()
-    queryAndRecord("1", 1)
-    queryAndRecord("2", 1)
-  }
-  def loadAndWrite(): Unit ={
-    val dns = spark.sparkContext
-      .textFile(dataSourceFolder+"result")
-      .map(_.split("\t"))
-      .map(tokens => Dns(tokens(0), tokens(1), tokens(2), tokens(3),
-        tokens(4).toInt, tokens(5).toInt, tokens(6).toLong, tokens(7).toLong,
-        tokens(8),tokens(9).toInt, tokens(10).toInt, tokens(11),
-        tokens(12).toInt, tokens(13).toInt, tokens(14).toInt, tokens(15).toInt,
-        tokens(16), tokens(17), tokens(18), tokens(19),
-        tokens(20), tokens(21)))
-    val dnsDF = spark.createDataFrame(dns)
-    dnsDF.write.parquet(parquetPath)
-  }
-
-  def setupFS(): Unit ={
-    val conf = new Configuration()
-    conf.set("fs.defaultFS", "hdfs://server1:9000")
-    fs = FileSystem.get(conf)
-  }
-
-  def loadQueries(queryPath: String): Array[String] ={
-    val file = fs.open(new Path(queryPath))
-    val fileContent = new String(IOUtils.toByteArray(file))
-    val queries = fileContent.split("====")
-    queries
-  }
-  def queryAndRecord(query: String, count: Int): Unit ={
-    // Writer
-    val file = new File(localDir + "query"+query+"-time")
-    if(file.exists()) file.delete()
-    file.createNewFile()
-    val pw = new PrintWriter(new FileWriter(file))
-
-    // Query
-    val queries = loadQueries(dataSourceFolder + "queries"+query+".sql")
-    var totalTime = 0.0
-    var i = 0
-    for (i <- 0 until count) {
-      val start = System.currentTimeMillis()
-      val result = spark.sql(queries(i))
-      val rowCount = result.count()
-      val time = System.currentTimeMillis() - start
-      totalTime += time
-      pw.write("query index "+i+": "+time + " ms. "+rowCount+"rows returned\n")
-    }
-    pw.write("=======\n")
-    pw.write("\tavg: " + (totalTime / count)+"\n")
-
-    pw.flush
-    pw.close
-
-    // Collect result
-    collectResults(query, count)
-    for(i <- 1 to 3){
-      ("scp /Users/yongshangwu/work/result/blank yongshangwu@server"+i+":/opt/record/"+index+"/index-load-time").!
-      ("scp /Users/yongshangwu/work/result/blank yongshangwu@server"+i+":/opt/record/"+index+"/skip").!
-    }
-  }
-
-  def collectResults(query: String, queryCount: Int): Unit ={
-    var i = 1
+    i = 1
     ("rm -rf "+localDir+"query"+query+"-index-load-time").!
     ("rm -rf "+localDir+"query"+query+"-skip").!
 
@@ -125,6 +42,7 @@ object DnsQuery {
     if(file.exists()){
       val content = new String(Files.readAllBytes(Paths.get(path)))
       val lines = content.split("\n")
+      var line: String = null
       var totalTime: Double = 0.0
       var count = 0
       for(line <- lines){
@@ -238,11 +156,4 @@ object DnsQuery {
       pw.close
     }
   }
-
 }
-case class Dns(rip: String, sip: String, dip: String, nip: String,
-               input: Int, output: Int, packets: Long, bytes: Long,
-               time: String, sport: Int, dport: Int, flags: String,
-               proto: Int, tos: Int, sas: Int, das: Int,
-               scc: String, dcc: String, province: String, operator: String,
-               spc: String, dpc: String)
