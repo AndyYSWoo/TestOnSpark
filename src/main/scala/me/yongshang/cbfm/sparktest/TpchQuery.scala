@@ -26,7 +26,7 @@ object TpchQuery {
     dataSourceFolder = args(0)
     RowGroupFilter.filePath = args(1)
     parquetDir = args(3)
-    
+
     // Dimensions
     val dimensions = Array("p_type", "p_brand", "p_container")
     val reduced: Array[Array[String]] =  Array(Array("p_type", "p_container"))
@@ -51,7 +51,7 @@ object TpchQuery {
     ("rm -rf "+localDir+"index-create-time").!
     ("rm -rf "+localDir+"index-space").!
     var i = 1
-    for(i <- 1 to 3){
+    for(i <- Array(2,3,6,7)){
       ("scp yongshangwu@server"+i+":/opt/record/"+index+"/index-create-time "+localDir+"ict"+i).!
       (("cat "+localDir+"ict"+i) #>> new File(localDir+"index-create-time")).!
       ("scp yongshangwu@server"+i+":/opt/record/"+index+"/index-space "+localDir+"is"+i).!
@@ -188,7 +188,7 @@ object TpchQuery {
 
     // Collect result
     collectResults(query, count)
-    for(i <- 1 to 3){
+    for(i <- Array(2,3,6,7)){
       ("scp /Users/yongshangwu/work/result/blank yongshangwu@server"+i+":/opt/record/"+index+"/index-load-time").!
       ("scp /Users/yongshangwu/work/result/blank yongshangwu@server"+i+":/opt/record/"+index+"/skip").!
     }
@@ -199,7 +199,7 @@ object TpchQuery {
     ("rm -rf "+localDir+"query"+query+"-index-load-time").!
     ("rm -rf "+localDir+"query"+query+"-skip").!
 
-    for(i <- 1 to 3){
+    for(i <- Array(2,3,6,7)){
       ("scp yongshangwu@server"+i+":/opt/record/"+index+"/index-load-time "+localDir+"query"+query+"-ilt"+i).!
       (("cat "+localDir+"query"+query+"-ilt"+i) #>> new File(localDir+"query"+query+"-index-load-time")).!
 

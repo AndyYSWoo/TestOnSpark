@@ -3,6 +3,7 @@ package me.yongshang.cbfm.sparktest
 import java.io._
 import java.nio.file.{Paths, Files}
 import org.apache.commons.io.IOUtils
+import org.apache.commons.lang.math.NumberUtils
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileSystem, Path}
 
@@ -23,24 +24,23 @@ object DnsQuery {
     dataSourceFolder = "hdfs://server1:9000/data/dns/"
     index = args(1)
     parquetPath = args(2)+"dns.parquet"
-    localDir = "/Users/yongshagnwu/work/result/"+index+"/"
+    localDir = "/Users/yongshangwu/work/result/"+index+"/"
 
-    // Dimensions
+    // Dimensions, set them manually in parquet-hadoop, due to different jvms
     val dimensions = Array("sip", "dip", "nip")
     val reduced: Array[Array[String]] =  Array(Array("dip", "nip"))
 
-    loadAndWrite()
-
-    // Gather files, ugly hack
-    ("rm -rf "+localDir+"index-create-time").!
-    ("rm -rf "+localDir+"index-space").!
-    var i = 1
-    for(i <- 1 to 3){
-      ("scp yongshangwu@server"+i+":/opt/record/"+index+"/index-create-time "+localDir+"ict"+i).!
-      (("cat "+localDir+"ict"+i) #>> new File(localDir+"index-create-time")).!
-      ("scp yongshangwu@server"+i+":/opt/record/"+index+"/index-space "+localDir+"is"+i).!
-      (("cat "+localDir+"is"+i) #>> new File(localDir+"index-space")).!
-    }
+//    loadAndWrite()
+//
+//    // Gather files, ugly hack
+//    ("rm -rf "+localDir+"index-create-time").!
+//    ("rm -rf "+localDir+"index-space").!
+//    for(i <- Array(2,3,6,7)){
+//      ("scp yongshangwu@server"+i+":/opt/record/"+index+"/index-create-time "+localDir+"ict"+i).!
+//      (("cat "+localDir+"ict"+i) #>> new File(localDir+"index-create-time")).!
+//      ("scp yongshangwu@server"+i+":/opt/record/"+index+"/index-space "+localDir+"is"+i).!
+//      (("cat "+localDir+"is"+i) #>> new File(localDir+"index-space")).!
+//    }
 
     spark.read.parquet(parquetPath).createOrReplaceTempView("dns")
 
@@ -52,6 +52,11 @@ object DnsQuery {
     val dns = spark.sparkContext
       .textFile(dataSourceFolder+"result")
       .map(_.split("\t"))
+      .filter(tokens => NumberUtils.isNumber(tokens(4)) && NumberUtils.isNumber(tokens(5))
+        && NumberUtils.isNumber(tokens(6)) && NumberUtils.isNumber(tokens(7))
+        && NumberUtils.isNumber(tokens(9)) && NumberUtils.isNumber(tokens(10))
+        && NumberUtils.isNumber(tokens(12)) && NumberUtils.isNumber(tokens(13))
+        && NumberUtils.isNumber(tokens(14)) && NumberUtils.isNumber(tokens(15)))
       .map(tokens => Dns(tokens(0), tokens(1), tokens(2), tokens(3),
         tokens(4).toInt, tokens(5).toInt, tokens(6).toLong, tokens(7).toLong,
         tokens(8),tokens(9).toInt, tokens(10).toInt, tokens(11),
@@ -87,11 +92,10 @@ object DnsQuery {
     var i = 0
     for (i <- 0 until count) {
       val start = System.currentTimeMillis()
-      val result = spark.sql(queries(i))
-      val rowCount = result.count()
+      val result = spark.sql(queries(i)).foreach(x => x)
       val time = System.currentTimeMillis() - start
       totalTime += time
-      pw.write("query index "+i+": "+time + " ms. "+rowCount+"rows returned\n")
+      pw.write("query index "+i+": "+time + " ms. ")//+rowCount+"rows returned\n")
     }
     pw.write("=======\n")
     pw.write("\tavg: " + (totalTime / count)+"\n")
@@ -101,7 +105,7 @@ object DnsQuery {
 
     // Collect result
     collectResults(query, count)
-    for(i <- 1 to 3){
+    for(i <- Array(2,3,6,7)){
       ("scp /Users/yongshangwu/work/result/blank yongshangwu@server"+i+":/opt/record/"+index+"/index-load-time").!
       ("scp /Users/yongshangwu/work/result/blank yongshangwu@server"+i+":/opt/record/"+index+"/skip").!
     }
@@ -112,7 +116,7 @@ object DnsQuery {
     ("rm -rf "+localDir+"query"+query+"-index-load-time").!
     ("rm -rf "+localDir+"query"+query+"-skip").!
 
-    for(i <- 1 to 3){
+    for(i <- Array(2,3,6,7)){
       ("scp yongshangwu@server"+i+":/opt/record/"+index+"/index-load-time "+localDir+"query"+query+"-ilt"+i).!
       (("cat "+localDir+"query"+query+"-ilt"+i) #>> new File(localDir+"query"+query+"-index-load-time")).!
 
