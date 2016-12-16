@@ -157,7 +157,7 @@ object TpchQuery {
 
   def loadQueries(queryPath: String): Array[String] ={
     val file = fs.open(new Path(queryPath))
-    val fileContent = new String(IOUtils.toByteArray(file));
+    val fileContent = new String(IOUtils.toByteArray(file))
     val queries = fileContent.split("====")
     queries
   }
@@ -175,7 +175,7 @@ object TpchQuery {
     for (i <- 0 until count) {
       val start = System.currentTimeMillis()
       val result = spark.sql(queries(i))
-      val rowCount = result.count();
+      val rowCount = result.count()
       val time = System.currentTimeMillis() - start
       totalTime += time
       pw.write("query index "+i+": "+time + " ms. "+rowCount+"rows returned\n")
@@ -218,7 +218,8 @@ object TpchQuery {
       for(line <- lines){
         if(line.startsWith("=")
           || line.startsWith("total:")
-          || line.startsWith("per")){
+          || line.startsWith("per")
+          || line.startsWith("block")){
           totalTime = 0.0
           count = 0
         }else{
@@ -231,6 +232,7 @@ object TpchQuery {
       pw.write("=======\n")
       pw.write("total: "+totalTime+" ms\n")
       pw.write("per query: "+(totalTime/queryCount)+" ms\n")
+      pw.write("block count: " + count + "\n")
       pw.write("per block: "+(totalTime/count)+" ms\n")
       pw.flush
       pw.close
@@ -282,7 +284,8 @@ object TpchQuery {
       for(line <- lines){
         if(line.startsWith("==")
           || line.startsWith("total")
-          || line.startsWith("per")){
+          || line.startsWith("per")
+          || line.startsWith("block")){
           totalTime = 0
           count = 0
         }else{
@@ -294,6 +297,7 @@ object TpchQuery {
       pw.write("=======\n")
       pw.write("total: "+totalTime+" ms\n")
       pw.write("per query: "+(totalTime/queryCount)+" ms\n")
+      pw.write("block count: "+count+"\n")
       pw.write("per block: "+(totalTime/count)+" ms\n")
       pw.flush
       pw.close
@@ -310,7 +314,8 @@ object TpchQuery {
       for(line <- lines){
         if(line.startsWith("==")
           || line.startsWith("total")
-          || line.startsWith("per")){
+          || line.startsWith("per")
+          || line.startsWith("block")){
           totalSpace = 0.0
           count = 0
         }else{
@@ -321,6 +326,7 @@ object TpchQuery {
       val pw = new PrintWriter(new FileWriter(file, true))
       pw.write("=======\n")
       pw.write("total: "+totalSpace+" MB\n")
+      pw.write("block count: "+count+"\n")
       pw.write("per block: "+(totalSpace/count)+" MB\n")
       pw.flush
       pw.close

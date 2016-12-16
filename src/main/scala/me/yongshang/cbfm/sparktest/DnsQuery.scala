@@ -30,23 +30,29 @@ object DnsQuery {
     val dimensions = Array("sip", "dip", "nip")
     val reduced: Array[Array[String]] =  Array(Array("dip", "nip"))
 
-//    loadAndWrite()
-//
-//    // Gather files, ugly hack
-//    ("rm -rf "+localDir+"index-create-time").!
-//    ("rm -rf "+localDir+"index-space").!
-//    for(i <- Array(2,3,6,7)){
-//      ("scp yongshangwu@server"+i+":/opt/record/"+index+"/index-create-time "+localDir+"ict"+i).!
-//      (("cat "+localDir+"ict"+i) #>> new File(localDir+"index-create-time")).!
-//      ("scp yongshangwu@server"+i+":/opt/record/"+index+"/index-space "+localDir+"is"+i).!
-//      (("cat "+localDir+"is"+i) #>> new File(localDir+"index-space")).!
-//    }
+    // Clean records before writing
+    for(i <- Array(2,3,6,7)){
+      ("scp /Users/yongshangwu/work/result/blank yongshangwu@server"+i+":/opt/record/"+index+"/index-create-time").!
+      ("scp /Users/yongshangwu/work/result/blank yongshangwu@server"+i+":/opt/record/"+index+"/index-space").!
+    }
 
-    spark.read.parquet(parquetPath).createOrReplaceTempView("dns")
+    loadAndWrite()
 
-    setupFS()
-    queryAndRecord("1", 1)
-    queryAndRecord("2", 1)
+    // Gather writing records
+    ("rm -rf "+localDir+"index-create-time").!
+    ("rm -rf "+localDir+"index-space").!
+    for(i <- Array(2,3,6,7)){
+      ("scp yongshangwu@server"+i+":/opt/record/"+index+"/index-create-time "+localDir+"ict"+i).!
+      (("cat "+localDir+"ict"+i) #>> new File(localDir+"index-create-time")).!
+      ("scp yongshangwu@server"+i+":/opt/record/"+index+"/index-space "+localDir+"is"+i).!
+      (("cat "+localDir+"is"+i) #>> new File(localDir+"index-space")).!
+    }
+    collectWriteResults()
+
+//    spark.read.parquet(parquetPath).createOrReplaceTempView("dns")
+//    setupFS()
+//    queryAndRecord("1", 1)
+//    queryAndRecord("2", 1)
   }
   def loadAndWrite(): Unit ={
     val dns = spark.sparkContext
@@ -79,7 +85,14 @@ object DnsQuery {
     val queries = fileContent.split("====")
     queries
   }
+
   def queryAndRecord(query: String, count: Int): Unit ={
+    // Clean records before query
+    for(i <- Array(2,3,6,7)){
+      ("scp /Users/yongshangwu/work/result/blank yongshangwu@server"+i+":/opt/record/"+index+"/index-load-time").!
+      ("scp /Users/yongshangwu/work/result/blank yongshangwu@server"+i+":/opt/record/"+index+"/skip").!
+    }
+
     // Writer
     val file = new File(localDir + "query"+query+"-time")
     if(file.exists()) file.delete()
@@ -92,26 +105,82 @@ object DnsQuery {
     var i = 0
     for (i <- 0 until count) {
       val start = System.currentTimeMillis()
-      val result = spark.sql(queries(i)).foreach(x => x)
+      val result = spark.sql(queries(i))
+      val rowCount = result.count()
       val time = System.currentTimeMillis() - start
       totalTime += time
-      pw.write("query index "+i+": "+time + " ms. ")//+rowCount+"rows returned\n")
+      pw.write("query index "+i+": "+time + " ms. "+rowCount+"rows returned\n")
     }
     pw.write("=======\n")
     pw.write("\tavg: " + (totalTime / count)+"\n")
-
     pw.flush
     pw.close
 
     // Collect result
-    collectResults(query, count)
-    for(i <- Array(2,3,6,7)){
-      ("scp /Users/yongshangwu/work/result/blank yongshangwu@server"+i+":/opt/record/"+index+"/index-load-time").!
-      ("scp /Users/yongshangwu/work/result/blank yongshangwu@server"+i+":/opt/record/"+index+"/skip").!
+    collectQueryResults(query, count)
+  }
+
+  def collectWriteResults(): Unit ={
+    // index create time
+    var path = localDir + "index-create-time"
+    var file = new File(path)
+    if(file.exists()){
+      val lines = new String(Files.readAllBytes(Paths.get(path))).split("\n")
+      var line: String = null
+      var totalTime: Double = 0.0
+      var count = 0
+      for(line <- lines){
+        if(line.startsWith("==")
+          || line.startsWith("total")
+          || line.startsWith("per")
+          || line.startsWith("block")){
+          totalTime = 0
+          count = 0
+        }else{
+          totalTime += Integer.valueOf(line.split(" ")(0))
+          count += 1
+        }
+      }
+      val pw = new PrintWriter(new FileWriter(file, true))
+      pw.write("=======\n")
+      pw.write("total: "+totalTime+" ms\n")
+      pw.write("block count: "+count+"\n")
+      pw.write("per block: "+(totalTime/count)+" ms\n")
+      pw.flush
+      pw.close
+    }
+
+    // index space
+    path = localDir + "index-space"
+    file = new File(path)
+    if(file.exists()){
+      val lines = new String(Files.readAllBytes(Paths.get(path))).split("\n")
+      var line: String = null
+      var totalSpace: Double = 0.0
+      var count = 0
+      for(line <- lines){
+        if(line.startsWith("==")
+          || line.startsWith("total")
+          || line.startsWith("per")
+          || line.startsWith("block")){
+          totalSpace = 0.0
+          count = 0
+        }else{
+          totalSpace += java.lang.Double.valueOf(line.split(" ")(0))
+          count += 1
+        }
+      }
+      val pw = new PrintWriter(new FileWriter(file, true))
+      pw.write("=======\n")
+      pw.write("total: "+totalSpace+" MB\n")
+      pw.write("block count: "+count+"\n")
+      pw.write("per block: "+(totalSpace/count)+" MB\n")
+      pw.flush
+      pw.close
     }
   }
 
-  def collectResults(query: String, queryCount: Int): Unit ={
+  def collectQueryResults(query: String, queryCount: Int): Unit ={
     var i = 1
     ("rm -rf "+localDir+"query"+query+"-index-load-time").!
     ("rm -rf "+localDir+"query"+query+"-skip").!
@@ -134,7 +203,8 @@ object DnsQuery {
       for(line <- lines){
         if(line.startsWith("=")
           || line.startsWith("total:")
-          || line.startsWith("per")){
+          || line.startsWith("per")
+          || line.startsWith("block")){
           totalTime = 0.0
           count = 0
         }else{
@@ -147,6 +217,7 @@ object DnsQuery {
       pw.write("=======\n")
       pw.write("total: "+totalTime+" ms\n")
       pw.write("per query: "+(totalTime/queryCount)+" ms\n")
+      pw.write("block count: "+ count +"\n")
       pw.write("per block: "+(totalTime/count)+" ms\n")
       pw.flush
       pw.close
@@ -160,8 +231,8 @@ object DnsQuery {
       var line: String = null
       var totalBlocks = 0
       var skippedBlocks = 0
-      var scannedRows = 0
-      var skippedRows = 0
+      var scannedRows: Long = 0
+      var skippedRows: Long = 0
       for(line <- lines){
         if(line.startsWith("=")
           || line.startsWith("blocks:")
@@ -185,64 +256,7 @@ object DnsQuery {
       pw.flush
       pw.close
     }
-
-    // index create time
-    path = localDir + "index-create-time"
-    file = new File(path)
-    if(file.exists()){
-      val lines = new String(Files.readAllBytes(Paths.get(path))).split("\n")
-      if(lines.contains("=======")) return
-      var line: String = null
-      var totalTime: Double = 0.0
-      var count = 0
-      for(line <- lines){
-        if(line.startsWith("==")
-          || line.startsWith("total")
-          || line.startsWith("per")){
-          totalTime = 0
-          count = 0
-        }else{
-          totalTime += Integer.valueOf(line.split(" ")(0))
-          count += 1
-        }
-      }
-      val pw = new PrintWriter(new FileWriter(file, true))
-      pw.write("=======\n")
-      pw.write("total: "+totalTime+" ms\n")
-      pw.write("per query: "+(totalTime/queryCount)+" ms\n")
-      pw.write("per block: "+(totalTime/count)+" ms\n")
-      pw.flush
-      pw.close
-    }
-
-    // index space
-    path = localDir + "index-space"
-    file = new File(path)
-    if(file.exists()){
-      val lines = new String(Files.readAllBytes(Paths.get(path))).split("\n")
-      var line: String = null
-      var totalSpace: Double = 0.0
-      var count = 0
-      for(line <- lines){
-        if(line.startsWith("==")
-          || line.startsWith("total")
-          || line.startsWith("per")){
-          totalSpace = 0.0
-          count = 0
-        }else{
-          totalSpace += java.lang.Double.valueOf(line.split(" ")(0))
-          count += 1
-        }
-      }
-      val pw = new PrintWriter(new FileWriter(file, true))
-      pw.write("=======\n")
-      pw.write("total: "+totalSpace+" MB\n")
-      pw.write("per block: "+(totalSpace/count)+" MB\n")
-      pw.flush
-      pw.close
-    }
   }
-
 }
 case class Dns(rip: String, sip: String, dip: String, nip: String,
                input: Int, output: Int, packets: Long, bytes: Long,
