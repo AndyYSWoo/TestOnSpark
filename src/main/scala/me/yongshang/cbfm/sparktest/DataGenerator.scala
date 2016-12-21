@@ -19,7 +19,7 @@ object DataGenerator {
     .appName("Skip Test")
     .config("parquet.task.side.metadata", true)
     .config("parquet.enable.dictionary",false)
-//    .config("parquet.block.size", blockSize)
+//    .config("spark.sql.join.preferSortMergeJoin", false)
     .config("spark.sql.parquet.compression.codec", "uncompressed")
     .getOrCreate
 

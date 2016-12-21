@@ -38,7 +38,6 @@ object DnsQuery {
 
     loadAndWrite()
 
-    // Gather writing records
     ("rm -rf "+localDir+"index-create-time").!
     ("rm -rf "+localDir+"index-space").!
     for(i <- Array(2,3,6,7)){
@@ -49,10 +48,11 @@ object DnsQuery {
     }
     collectWriteResults()
 
-//    spark.read.parquet(parquetPath).createOrReplaceTempView("dns")
-//    setupFS()
-//    queryAndRecord("1", 1)
-//    queryAndRecord("2", 1)
+    // Load and query
+    spark.read.parquet(parquetPath).createOrReplaceTempView("dns")
+    setupFS()
+    queryAndRecord("1", 1)
+    queryAndRecord("2", 1)
   }
   def loadAndWrite(): Unit ={
     val dns = spark.sparkContext
@@ -117,7 +117,8 @@ object DnsQuery {
     pw.close
 
     // Collect result
-    collectQueryResults(query, count)
+    if(!index.equals("off"))
+      collectQueryResults(query, count)
   }
 
   def collectWriteResults(): Unit ={

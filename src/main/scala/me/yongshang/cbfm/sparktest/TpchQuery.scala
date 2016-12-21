@@ -26,41 +26,36 @@ object TpchQuery {
     dataSourceFolder = args(0)
     RowGroupFilter.filePath = args(1)
     parquetDir = args(3)
+    val parquetFile = parquetDir+"denormalized.parquet"
+    index = args(2)
+    localDir = "/Users/yongshangwu/work/result/"+index+"/"
 
     // Dimensions
     val dimensions = Array("p_type", "p_brand", "p_container")
     val reduced: Array[Array[String]] =  Array(Array("p_type", "p_container"))
 
-    // Load & denormalize tables
+//    // Clean records before writing
+    for(i <- Array(2,3,6,7)){
+      ("scp /Users/yongshangwu/work/result/blank yongshangwu@server"+i+":/opt/record/"+index+"/index-create-time").!
+      ("scp /Users/yongshangwu/work/result/blank yongshangwu@server"+i+":/opt/record/"+index+"/index-space").!
+    }
+
     val denormalized = loadDataAndDenormalize()
-
-    // Set up indexes
-    index = args(2)
-    localDir = "/Users/yongshangwu/work/result/"+index+"/"
-
-    DataGenerator.setUpCBFM(false)
-    DataGenerator.setUpBitmapCBFM(index.equals("cbfm"), dimensions, reduced)
-    DataGenerator.setUpMDBF(index.equals("mdbf"), dimensions)
-    DataGenerator.setUpCMDBF(index.equals("cmdbf"), dimensions)
-
-    // Write out with index
-    val parquetFile = parquetDir+"denormalized.parquet"
     denormalized.write.parquet(parquetFile)
 
-    // Gather files, ugly hack
     ("rm -rf "+localDir+"index-create-time").!
     ("rm -rf "+localDir+"index-space").!
-    var i = 1
     for(i <- Array(2,3,6,7)){
       ("scp yongshangwu@server"+i+":/opt/record/"+index+"/index-create-time "+localDir+"ict"+i).!
       (("cat "+localDir+"ict"+i) #>> new File(localDir+"index-create-time")).!
       ("scp yongshangwu@server"+i+":/opt/record/"+index+"/index-space "+localDir+"is"+i).!
       (("cat "+localDir+"is"+i) #>> new File(localDir+"index-space")).!
     }
+    collectWriteResults()
 
     // Read denormalized table & query
+    createTableNeeded(true)
     spark.read.parquet(parquetFile).createOrReplaceTempView("denormalized")
-    // Query
     setupFS()
     val queryCount = 1
     queryAndRecord("8", queryCount)
@@ -71,6 +66,41 @@ object TpchQuery {
     val conf = new Configuration()
     conf.set("fs.defaultFS", "hdfs://server1:9000")
     fs = FileSystem.get(conf)
+  }
+
+  def createTableNeeded(write: Boolean): Unit ={
+    if(write){
+      val nation = spark.sparkContext
+        .textFile(dataSourceFolder+"nation.tbl")
+        .map(_.split("\\|"))
+        .map(attrs => Nation(attrs(0).toInt, attrs(1), attrs(2)
+          , attrs(3)))
+      val nationDF = spark.createDataFrame(nation)
+      nationDF.createOrReplaceTempView("nation")
+      nationDF.write.parquet(parquetDir+"nation.parquet")
+
+      val region = spark.sparkContext
+        .textFile(dataSourceFolder+"region.tbl")
+        .map(_.split("\\|"))
+        .map(attrs => Region(attrs(0).toInt, attrs(1), attrs(2)))
+      val regionDF = spark.createDataFrame(region)
+      regionDF.write.parquet(parquetDir+"region.parquet")
+
+      val lineitem = spark.sparkContext
+        .textFile(dataSourceFolder+"lineitem.tbl")
+        .map(_.split("\\|"))
+        .map(attrs => Lineitem(attrs(0).toInt, attrs(1).toInt, attrs(2).toInt
+          , attrs(3).toInt, attrs(4).toDouble, attrs(5).toDouble
+          , attrs(6).toDouble, attrs(7).toDouble, attrs(8)
+          , attrs(9), Date.valueOf(attrs(10)), Date.valueOf(attrs(11))
+          , Date.valueOf(attrs(12)), attrs(13), attrs(14)
+          , attrs(15)))
+      val lineitemDF = spark.createDataFrame(lineitem)
+      lineitemDF.write.parquet(parquetDir+"lineitem.parquet")
+    }
+    spark.read.parquet(parquetDir+"nation.parquet").createOrReplaceTempView("nation")
+    spark.read.parquet(parquetDir+"region.parquet").createOrReplaceTempView("region")
+    spark.read.parquet(parquetDir+"lineitem.parquet").createOrReplaceTempView("lineitem")
   }
 
   def loadDataAndDenormalize(): DataFrame ={
@@ -91,14 +121,6 @@ object TpchQuery {
         , attrs(6)))
     val supplierDF = spark.createDataFrame(supplier)
     supplierDF.createOrReplaceTempView("supplier")
-
-    val partsupp = spark.sparkContext
-      .textFile(dataSourceFolder+"partsupp.tbl")
-      .map(_.split("\\|"))
-      .map(attrs => Partsupp(attrs(0).toInt, attrs(1).toInt, attrs(2).toInt
-        , attrs(3).toDouble, attrs(4)))
-    val partsuppDF = spark.createDataFrame(partsupp)
-    partsuppDF.createOrReplaceTempView("partsupp")
 
     val customer = spark.sparkContext
       .textFile(dataSourceFolder+"customer.tbl")
@@ -163,6 +185,12 @@ object TpchQuery {
   }
 
   def queryAndRecord(query: String, count: Int): Unit ={
+    // Clean records before query
+    for(i <- Array(2,3,6,7)){
+      ("scp /Users/yongshangwu/work/result/blank yongshangwu@server"+i+":/opt/record/"+index+"/index-load-time").!
+      ("scp /Users/yongshangwu/work/result/blank yongshangwu@server"+i+":/opt/record/"+index+"/skip").!
+    }
+
     // Writer
     val file = new File(localDir + "query"+query+"-time")
     file.createNewFile()
@@ -187,14 +215,11 @@ object TpchQuery {
     pw.close
 
     // Collect result
-    collectResults(query, count)
-    for(i <- Array(2,3,6,7)){
-      ("scp /Users/yongshangwu/work/result/blank yongshangwu@server"+i+":/opt/record/"+index+"/index-load-time").!
-      ("scp /Users/yongshangwu/work/result/blank yongshangwu@server"+i+":/opt/record/"+index+"/skip").!
-    }
+    if(!index.equals("off"))
+      collectQueryResults(query, count)
   }
 
-  def collectResults(query: String, queryCount: Int): Unit ={
+  def collectQueryResults(query: String, queryCount: Int): Unit ={
     var i = 1
     ("rm -rf "+localDir+"query"+query+"-index-load-time").!
     ("rm -rf "+localDir+"query"+query+"-skip").!
@@ -271,13 +296,15 @@ object TpchQuery {
       pw.flush
       pw.close
     }
+  }
+
+  def collectWriteResults(): Unit ={
 
     // index create time
-    path = localDir + "index-create-time"
-    file = new File(path)
+    var path = localDir + "index-create-time"
+    var file = new File(path)
     if(file.exists()){
       val lines = new String(Files.readAllBytes(Paths.get(path))).split("\n")
-      if(lines.contains("=======")) return
       var line: String = null
       var totalTime: Double = 0.0
       var count = 0
@@ -296,7 +323,6 @@ object TpchQuery {
       val pw = new PrintWriter(new FileWriter(file, true))
       pw.write("=======\n")
       pw.write("total: "+totalTime+" ms\n")
-      pw.write("per query: "+(totalTime/queryCount)+" ms\n")
       pw.write("block count: "+count+"\n")
       pw.write("per block: "+(totalTime/count)+" ms\n")
       pw.flush
