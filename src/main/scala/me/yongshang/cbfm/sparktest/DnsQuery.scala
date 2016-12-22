@@ -31,22 +31,22 @@ object DnsQuery {
     val reduced: Array[Array[String]] =  Array(Array("dip", "nip"))
 
     // Clean records before writing
-    for(i <- Array(2,3,6,7)){
-      ("scp /Users/yongshangwu/work/result/blank yongshangwu@server"+i+":/opt/record/"+index+"/index-create-time").!
-      ("scp /Users/yongshangwu/work/result/blank yongshangwu@server"+i+":/opt/record/"+index+"/index-space").!
-    }
-
-    loadAndWrite()
-
-    ("rm -rf "+localDir+"index-create-time").!
-    ("rm -rf "+localDir+"index-space").!
-    for(i <- Array(2,3,6,7)){
-      ("scp yongshangwu@server"+i+":/opt/record/"+index+"/index-create-time "+localDir+"ict"+i).!
-      (("cat "+localDir+"ict"+i) #>> new File(localDir+"index-create-time")).!
-      ("scp yongshangwu@server"+i+":/opt/record/"+index+"/index-space "+localDir+"is"+i).!
-      (("cat "+localDir+"is"+i) #>> new File(localDir+"index-space")).!
-    }
-    collectWriteResults()
+//    for(i <- Array(2,3,6,7)){
+//      ("scp /Users/yongshangwu/work/result/blank yongshangwu@server"+i+":/opt/record/"+index+"/index-create-time").!
+//      ("scp /Users/yongshangwu/work/result/blank yongshangwu@server"+i+":/opt/record/"+index+"/index-space").!
+//    }
+//
+//    loadAndWrite()
+//
+//    ("rm -rf "+localDir+"index-create-time").!
+//    ("rm -rf "+localDir+"index-space").!
+//    for(i <- Array(2,3,6,7)){
+//      ("scp yongshangwu@server"+i+":/opt/record/"+index+"/index-create-time "+localDir+"ict"+i).!
+//      (("cat "+localDir+"ict"+i) #>> new File(localDir+"index-create-time")).!
+//      ("scp yongshangwu@server"+i+":/opt/record/"+index+"/index-space "+localDir+"is"+i).!
+//      (("cat "+localDir+"is"+i) #>> new File(localDir+"index-space")).!
+//    }
+//    collectWriteResults()
 
     // Load and query
     spark.read.parquet(parquetPath).createOrReplaceTempView("dns")

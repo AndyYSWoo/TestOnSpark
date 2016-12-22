@@ -30,11 +30,7 @@ object TpchQuery {
     index = args(2)
     localDir = "/Users/yongshangwu/work/result/"+index+"/"
 
-    // Dimensions
-    val dimensions = Array("p_type", "p_brand", "p_container")
-    val reduced: Array[Array[String]] =  Array(Array("p_type", "p_container"))
-
-//    // Clean records before writing
+    // Clean records before writing
     for(i <- Array(2,3,6,7)){
       ("scp /Users/yongshangwu/work/result/blank yongshangwu@server"+i+":/opt/record/"+index+"/index-create-time").!
       ("scp /Users/yongshangwu/work/result/blank yongshangwu@server"+i+":/opt/record/"+index+"/index-space").!
@@ -54,12 +50,12 @@ object TpchQuery {
     collectWriteResults()
 
     // Read denormalized table & query
-    createTableNeeded(true)
-    spark.read.parquet(parquetFile).createOrReplaceTempView("denormalized")
-    setupFS()
-    val queryCount = 1
-    queryAndRecord("8", queryCount)
-    queryAndRecord("17", queryCount)
+//    createTableNeeded(true)
+//    spark.read.parquet(parquetFile).createOrReplaceTempView("denormalized")
+//    setupFS()
+//    val queryCount = 1
+//    queryAndRecord("8", queryCount)
+//    queryAndRecord("17", queryCount)
   }
 
   def setupFS(): Unit ={
