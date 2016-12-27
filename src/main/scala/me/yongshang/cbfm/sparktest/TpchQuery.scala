@@ -31,31 +31,31 @@ object TpchQuery {
     localDir = "/Users/yongshangwu/work/result/"+index+"/"
 
     // Clean records before writing
-    for(i <- Array(2,3,6,7)){
-      ("scp /Users/yongshangwu/work/result/blank yongshangwu@server"+i+":/opt/record/"+index+"/index-create-time").!
-      ("scp /Users/yongshangwu/work/result/blank yongshangwu@server"+i+":/opt/record/"+index+"/index-space").!
-    }
-
-    val denormalized = loadDataAndDenormalize()
-    denormalized.write.parquet(parquetFile)
-
-    ("rm -rf "+localDir+"index-create-time").!
-    ("rm -rf "+localDir+"index-space").!
-    for(i <- Array(2,3,6,7)){
-      ("scp yongshangwu@server"+i+":/opt/record/"+index+"/index-create-time "+localDir+"ict"+i).!
-      (("cat "+localDir+"ict"+i) #>> new File(localDir+"index-create-time")).!
-      ("scp yongshangwu@server"+i+":/opt/record/"+index+"/index-space "+localDir+"is"+i).!
-      (("cat "+localDir+"is"+i) #>> new File(localDir+"index-space")).!
-    }
-    collectWriteResults()
+//    for(i <- Array(2,3,6,7)){
+//      ("scp /Users/yongshangwu/work/result/blank yongshangwu@server"+i+":/opt/record/"+index+"/index-create-time").!
+//      ("scp /Users/yongshangwu/work/result/blank yongshangwu@server"+i+":/opt/record/"+index+"/index-space").!
+//    }
+//
+//    val denormalized = loadDataAndDenormalize()
+//    denormalized.write.parquet(parquetFile)
+//
+//    ("rm -rf "+localDir+"index-create-time").!
+//    ("rm -rf "+localDir+"index-space").!
+//    for(i <- Array(2,3,6,7)){
+//      ("scp yongshangwu@server"+i+":/opt/record/"+index+"/index-create-time "+localDir+"ict"+i).!
+//      (("cat "+localDir+"ict"+i) #>> new File(localDir+"index-create-time")).!
+//      ("scp yongshangwu@server"+i+":/opt/record/"+index+"/index-space "+localDir+"is"+i).!
+//      (("cat "+localDir+"is"+i) #>> new File(localDir+"index-space")).!
+//    }
+//    collectWriteResults()
 
     // Read denormalized table & query
-//    createTableNeeded(true)
-//    spark.read.parquet(parquetFile).createOrReplaceTempView("denormalized")
-//    setupFS()
-//    val queryCount = 1
-//    queryAndRecord("8", queryCount)
-//    queryAndRecord("17", queryCount)
+    createTableNeeded(true)
+    spark.read.parquet(parquetFile).createOrReplaceTempView("denormalized")
+    setupFS()
+    val queryCount = 1
+    queryAndRecord("8", queryCount)
+    queryAndRecord("17", queryCount)
   }
 
   def setupFS(): Unit ={
