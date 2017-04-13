@@ -8,6 +8,7 @@ import org.apache.commons.io.IOUtils
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{Path, FileSystem}
 import org.apache.parquet.filter2.compat.RowGroupFilter
+import org.apache.spark.HashPartitioner
 import org.apache.spark.sql.DataFrame
 import sys.process._
 /**
@@ -163,6 +164,9 @@ object TpchQuery {
     val regionDF = spark.createDataFrame(region)
     regionDF.createOrReplaceTempView("region")
 
+    region.keyBy(_.r_name).partitionBy(new HashPartitioner(1))
+
+
     val joinQuery =
       "SELECT * FROM " +
         "part LEFT OUTER JOIN lineitem ON p_partkey=l_partkey " +
@@ -186,7 +190,6 @@ object TpchQuery {
       ("scp /Users/yongshangwu/work/result/blank yongshangwu@server"+i+":/opt/record/"+index+"/index-load-time").!
       ("scp /Users/yongshangwu/work/result/blank yongshangwu@server"+i+":/opt/record/"+index+"/skip").!
     }
-
     // Writer
     val file = new File(localDir + "query"+query+"-time")
     file.createNewFile()
